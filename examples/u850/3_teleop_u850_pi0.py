@@ -4,6 +4,7 @@ import tqdm
 from lerobot.common.robot_devices.motors.ufactory import xArmWrapper
 from lerobot.common.robot_devices.robots.manipulator import ManipulatorRobot
 from lerobot.common.robot_devices.cameras.opencv import OpenCVCamera
+from lerobot.common.robot_devices.cameras.intelrealsense import IntelRealSenseCamera
 
 # Defines how to communicate with the motors of the leader and follower arms
 leader_arms = {
@@ -39,10 +40,10 @@ follower_arms = {
 robot = ManipulatorRobot(
     robot_type="u850",
     calibration_dir=".cache/calibration/u850",
-    # cameras={
-    #     "top": OpenCVCamera(8, fps=30, width=640, height=480),
-    #     "wrist": OpenCVCamera(6, fps=30, width=640, height=480),
-    # },    
+    cameras={
+        "top": OpenCVCamera(0, fps=30, width=640, height=480),
+        "wrist": IntelRealSenseCamera(218622273032, fps=30, width=640, height=480),#, use_depth = True),
+    },    
     leader_arms=leader_arms,
     follower_arms=follower_arms,
 )
@@ -58,9 +59,9 @@ try:
         # # Recording data, only joints
         #leader_pos = robot.leader_arms["main"].get_position()
         #follower_pos = robot.follower_arms["main"].get_position()
-        start = time.time()
+        start = time.perf_counter
         observation, action = robot.teleop_step(record_data=True)
-        end = time.time()
+        end = time.perf_counter()
         print("Time taken for teleop_step:", end - start)
 
         # print(follower_pos)

@@ -6,6 +6,15 @@ from lerobot.common.robot_devices.robots.manipulator import ManipulatorRobot
 from lerobot.common.robot_devices.cameras.opencv import OpenCVCamera
 from lerobot.common.robot_devices.cameras.intelrealsense import IntelRealSenseCamera
 
+
+from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.common.datasets.populate_dataset import (
+    create_lerobot_dataset,
+    delete_current_episode,
+    init_dataset,
+    save_current_episode,
+)
+
 # Defines how to communicate with the motors of the leader and follower arms
 leader_arms = {
     "main": xArmWrapper(
@@ -41,8 +50,8 @@ robot = ManipulatorRobot(
     robot_type="u850",
     calibration_dir=".cache/calibration/u850",
     cameras={
-        "top": OpenCVCamera(0, fps=30, width=640, height=480),
-        "wrist": IntelRealSenseCamera(218622273032, fps=30, width=640, height=480),#, use_depth = True),
+        "top": OpenCVCamera(8, fps=30, width=640, height=480),
+        "wrist": OpenCVCamera(6,fps = 30, width = 640, height = 480),#, use_depth = True), ## apparently Opencvcamera 6 is realsense  camera
     },    
     leader_arms=leader_arms,
     follower_arms=follower_arms,
@@ -50,6 +59,7 @@ robot = ManipulatorRobot(
 
 # Connect motors buses and cameras if any (Required)
 robot.connect()
+print('lol')
 
 try:
     while True:
@@ -59,11 +69,8 @@ try:
         # # Recording data, only joints
         #leader_pos = robot.leader_arms["main"].get_position()
         #follower_pos = robot.follower_arms["main"].get_position()
-        start = time.perf_counter
         observation, action = robot.teleop_step(record_data=True)
-        end = time.perf_counter()
-        print("Time taken for teleop_step:", end - start)
-
+        #print(observation)
         # print(follower_pos)
         # print(observation)
         # print(leader_pos)

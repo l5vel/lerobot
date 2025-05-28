@@ -691,7 +691,7 @@ class ManipulatorRobot:
                 # Direct sending for other robots or if interpolation is disabled
                 goal_pos_np = goal_pos.numpy().astype(np.int32)
                 if self.robot_type == "u850":
-                    self.follower_arms[name].set_position_replay(goal_pos_np)
+                    self.follower_arms[name].set_position(goal_pos_np)
                 else:
                     self.follower_arms[name].write("Goal_Position", goal_pos_np)
 

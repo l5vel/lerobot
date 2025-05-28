@@ -14,8 +14,6 @@ from typing import Sequence
 
 import numpy as np
 import torch
-from threading import Thread
-from scipy.interpolate import CubicSpline
 
 from lerobot.common.robot_devices.cameras.utils import Camera
 from lerobot.common.robot_devices.motors.utils import MotorsBus
@@ -228,9 +226,6 @@ class ManipulatorRobot:
         self.is_connected = False
         self.logs = {}
 
-        self.interpolators = {}
-        self.use_interpolation = kwargs.get('use_interpolation', True)
-
     @property
     def has_camera(self):
         return len(self.cameras) > 0
@@ -323,13 +318,6 @@ class ManipulatorRobot:
             self.follower_arms[name].read("Present_Position")
         for name in self.leader_arms:
             self.leader_arms[name].read("Present_Position")
-
-        if self.robot_type == "u850" and self.use_interpolation:
-            for name, arm in self.follower_arms.items():
-                num_joints = len(arm.motor_names)
-                self.interpolators[name] = InterpolatedJointPublisher(arm, num_joints)
-                self.interpolators[name].start()
-                print(f"Started joint interpolation for {name} follower arm at 200Hz")
 
         self.is_connected = True
 
@@ -684,16 +672,12 @@ class ManipulatorRobot:
             # Save tensor to concat and return
             action_sent.append(goal_pos)
 
-            if self.robot_type == "u850" and self.use_interpolation and name in self.interpolators:
-                # Use interpolation for u850 - the interpolator will handle sending at 200Hz
-                self.interpolators[name].add_waypoint(goal_pos)
+            # Send goal position to each follower
+            goal_pos = goal_pos.numpy().astype(np.int32)
+            if self.robot_type == "u850":
+                self.follower_arms[name].set_position_replay(goal_pos)
             else:
-                # Direct sending for other robots or if interpolation is disabled
-                goal_pos_np = goal_pos.numpy().astype(np.int32)
-                if self.robot_type == "u850":
-                    self.follower_arms[name].set_position_replay(goal_pos_np)
-                else:
-                    self.follower_arms[name].write("Goal_Position", goal_pos_np)
+                self.follower_arms[name].write("Goal_Position", goal_pos)
 
         return torch.cat(action_sent)
 
@@ -715,149 +699,9 @@ class ManipulatorRobot:
 
         for name in self.cameras:
             self.cameras[name].disconnect()
-        
-        if self.robot_type == "u850" and hasattr(self, 'interpolators'):
-            for name, interpolator in self.interpolators.items():
-                interpolator.stop()
 
         self.is_connected = False
 
     def __del__(self):
         if getattr(self, "is_connected", False):
             self.disconnect()
-
-
-
-class InterpolatedJointPublisher:
-    """Interpolates between low-frequency commands to generate smooth trajectories at higher frequency.
-    
-    This class maintains a history of joint positions and timestamps, generates cubic spline
-    interpolations, and publishes smooth trajectories at a higher frequency.
-    """
-    
-    def __init__(self, follower_arm, num_joints, target_freq=200, history_size=5):
-        """Initialize the joint interpolator.
-        
-        Args:
-            follower_arm: The robot arm to control
-            num_joints: Number of joints to control
-            target_freq: Target publication frequency in Hz (default: 200Hz)
-            history_size: Number of historical points to use for spline fitting (default: 5)
-        """
-        self.follower_arm = follower_arm
-        self.num_joints = num_joints
-        self.target_freq = target_freq
-        self.period = 1.0 / target_freq
-        
-        # History of positions and timestamps
-        self.history_size = history_size
-        self.timestamps = []
-        self.positions = []
-        
-        # Interpolation
-        self.splines = None
-        self.last_position = None
-        
-        # Thread control
-        self.running = False
-        self.thread = None
-        
-    def start(self):
-        """Start the interpolation thread"""
-        if self.thread is not None and self.thread.is_alive():
-            return  # Already running
-            
-        self.running = True
-        self.thread = Thread(target=self._interpolation_loop)
-        self.thread.daemon = True  # Allow Python to exit even if thread is running
-        self.thread.start()
-        
-    def stop(self):
-        """Stop the interpolation thread"""
-        self.running = False
-        if self.thread is not None:
-            self.thread.join(timeout=1.0)  # Wait up to 1 second for thread to exit
-            
-    def add_waypoint(self, position, timestamp=None):
-        """Add a new waypoint for interpolation.
-        
-        Args:
-            position: Joint positions as numpy array or torch tensor
-            timestamp: Timestamp for this position (default: current time)
-        """
-        if timestamp is None:
-            timestamp = time.time()
-            
-        # Convert to numpy if needed
-        if isinstance(position, torch.Tensor):
-            position = position.detach().cpu().numpy()
-            
-        # Store position and timestamp
-        self.timestamps.append(timestamp)
-        self.positions.append(position.copy())
-        
-        # Keep only recent history
-        if len(self.timestamps) > self.history_size:
-            self.timestamps = self.timestamps[-self.history_size:]
-            self.positions = self.positions[-self.history_size:]
-            
-        # Update splines if enough data
-        if len(self.timestamps) >= 3:
-            self._update_splines()
-            
-        # Always store the most recent position
-        self.last_position = position
-    
-    def _update_splines(self):
-        """Update cubic splines with latest data"""
-        if len(self.timestamps) < 2:
-            return
-            
-        # Convert lists to numpy arrays
-        times = np.array(self.timestamps)
-        positions = np.array(self.positions)
-        
-        # Create splines for each joint
-        self.splines = []
-        for joint_idx in range(self.num_joints):
-            joint_pos = positions[:, joint_idx]
-            self.splines.append(CubicSpline(times, joint_pos))
-    
-    def _interpolation_loop(self):
-        """Main interpolation loop that runs at target frequency"""
-        while self.running:
-            start_time = time.time()
-            
-            # Interpolate and publish if we have splines
-            if self.splines and len(self.splines) > 0:
-                current_time = time.time()
-                
-                # Don't extrapolate too far into the future (max 200ms)
-                if self.timestamps and current_time - self.timestamps[-1] < 0.2:
-                    # Interpolate position for current time
-                    interp_positions = np.zeros(self.num_joints)
-                    for i, spline in enumerate(self.splines):
-                        interp_positions[i] = spline(current_time)
-                    
-                    # Send to robot
-                    self._send_to_robot(interp_positions)
-                elif self.last_position is not None:
-                    # If we're too far from last data point, use last position
-                    self._send_to_robot(self.last_position)
-            
-            # Precise timing control
-            elapsed = time.time() - start_time
-            sleep_time = max(0, self.period - elapsed)
-            time.sleep(sleep_time)
-    
-    def _send_to_robot(self, positions):
-        """Send positions directly to the robot
-        
-        Args:
-            positions: Joint positions as numpy array
-        """
-        # Convert to int32 as required by the robot
-        positions = positions.astype(np.int32)
-        
-        # Send directly to the robot
-        self.follower_arm.set_position(positions)

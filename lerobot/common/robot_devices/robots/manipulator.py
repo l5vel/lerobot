@@ -729,34 +729,33 @@ class ManipulatorRobot:
 
 
 class InterpolatedJointPublisher:
-    """Interpolates between low-frequency commands to generate smooth trajectories at higher frequency.
+    """Publishes interpolated joint positions at high frequency for the u850 robot.
     
-    This class maintains a history of joint positions and timestamps, generates cubic spline
-    interpolations, and publishes smooth trajectories at a higher frequency.
+    This class receives joint positions at low frequency (30Hz),
+    creates intermediate waypoints between current and target position,
+    and sends them to the robot at a higher frequency (200Hz).
     """
     
-    def __init__(self, follower_arm, num_joints, target_freq=200, history_size=5):
-        """Initialize the joint interpolator.
-        
+    def __init__(self, follower_arm, num_joints, target_freq=200):
+        """
         Args:
-            follower_arm: The robot arm to control
+            follower_arm: Reference to the follower arm object
             num_joints: Number of joints to control
-            target_freq: Target publication frequency in Hz (default: 200Hz)
-            history_size: Number of historical points to use for spline fitting (default: 5)
+            target_freq: Publication frequency in Hz
         """
         self.follower_arm = follower_arm
         self.num_joints = num_joints
         self.target_freq = target_freq
         self.period = 1.0 / target_freq
         
-        # History of positions and timestamps
-        self.history_size = history_size
-        self.timestamps = []
-        self.positions = []
+        # Current and target position tracking
+        self.current_position = None  # Will be set on first command
+        self.target_position = None   # Next position to reach
+        self.last_command_time = None # When we received the last command
         
-        # Interpolation
-        self.splines = None
-        self.last_position = None
+        # Interpolation state
+        self.is_moving = False        # Whether we're currently interpolating
+        self.move_duration = 1/30.0   # Default move time (30Hz commands)
         
         # Thread control
         self.running = False
@@ -769,86 +768,97 @@ class InterpolatedJointPublisher:
             
         self.running = True
         self.thread = Thread(target=self._interpolation_loop)
-        self.thread.daemon = True  # Allow Python to exit even if thread is running
+        self.thread.daemon = True
         self.thread.start()
+        print(f"Started joint interpolation publisher at {self.target_freq}Hz")
         
     def stop(self):
         """Stop the interpolation thread"""
         self.running = False
         if self.thread is not None:
-            self.thread.join(timeout=1.0)  # Wait up to 1 second for thread to exit
+            self.thread.join(timeout=1.0)
+            print("Stopped joint interpolation publisher")
             
-    def add_waypoint(self, position, timestamp=None):
-        """Add a new waypoint for interpolation.
+    def add_waypoint(self, target_position):
+        """Set a new target position
         
         Args:
-            position: Joint positions as numpy array or torch tensor
-            timestamp: Timestamp for this position (default: current time)
+            target_position: Joint positions as numpy array or torch tensor
         """
-        if timestamp is None:
-            timestamp = time.time()
-            
         # Convert to numpy if needed
-        if isinstance(position, torch.Tensor):
-            position = position.detach().cpu().numpy()
+        if isinstance(target_position, torch.Tensor):
+            target_position = target_position.detach().cpu().numpy()
             
-        # Store position and timestamp
-        self.timestamps.append(timestamp)
-        self.positions.append(position.copy())
+        # Get current position if we don't have it
+        if self.current_position is None:
+            try:
+                self.current_position = np.array(self.follower_arm.get_position())
+            except:
+                # If we can't get the position, use the target as current
+                self.current_position = target_position.copy()
         
-        # Keep only recent history
-        if len(self.timestamps) > self.history_size:
-            self.timestamps = self.timestamps[-self.history_size:]
-            self.positions = self.positions[-self.history_size:]
-            
-        # Update splines if enough data
-        if len(self.timestamps) >= 3:
-            self._update_splines()
-            
-        # Always store the most recent position
-        self.last_position = position
-    
-    def _update_splines(self):
-        """Update cubic splines with latest data"""
-        if len(self.timestamps) < 2:
-            return
-            
-        # Convert lists to numpy arrays
-        times = np.array(self.timestamps)
-        positions = np.array(self.positions)
-        
-        # Create splines for each joint
-        self.splines = []
-        for joint_idx in range(self.num_joints):
-            joint_pos = positions[:, joint_idx]
-            self.splines.append(CubicSpline(times, joint_pos))
+        # Set the target and mark that we're moving
+        self.target_position = target_position.copy()
+        self.is_moving = True
+        self.last_command_time = time.time()
     
     def _interpolation_loop(self):
         """Main interpolation loop that runs at target frequency"""
         while self.running:
             start_time = time.time()
             
-            # Interpolate and publish if we have splines
-            if self.splines and len(self.splines) > 0:
-                current_time = time.time()
+            # Generate and send interpolated positions
+            if self.is_moving and self.current_position is not None and self.target_position is not None:
                 
-                # Don't extrapolate too far into the future (max 200ms)
-                if self.timestamps and current_time - self.timestamps[-1] < 0.2:
-                    # Interpolate position for current time
-                    interp_positions = np.zeros(self.num_joints)
-                    for i, spline in enumerate(self.splines):
-                        interp_positions[i] = spline(current_time)
+                # Calculate time within the current movement (0.0 to 1.0)
+                elapsed = time.time() - self.last_command_time
+                alpha = min(elapsed / self.move_duration, 1.0)
+                
+                if alpha < 1.0:
+                    # Generate interpolated position
+                    interp_position = self._interpolate_positions(
+                        self.current_position, self.target_position, alpha)
                     
                     # Send to robot
-                    self._send_to_robot(interp_positions)
-                elif self.last_position is not None:
-                    # If we're too far from last data point, use last position
-                    self._send_to_robot(self.last_position)
+                    self._send_to_robot(interp_position)
+                else:
+                    # We've reached the target, send final position
+                    self._send_to_robot(self.target_position)
+                    
+                    # Mark as complete and update current position
+                    self.is_moving = False
+                    self.current_position = self.target_position.copy()
             
-            # Precise timing control
+            # Maintain precise timing
             elapsed = time.time() - start_time
             sleep_time = max(0, self.period - elapsed)
             time.sleep(sleep_time)
+    
+    def _interpolate_positions(self, start_pos, end_pos, alpha):
+        """Interpolate between start and end positions with minimum jerk trajectory
+        
+        Args:
+            start_pos: Starting joint positions
+            end_pos: Ending joint positions
+            alpha: Interpolation factor (0.0 to 1.0)
+            
+        Returns:
+            Interpolated joint positions
+        """
+        # Minimum jerk trajectory (very smooth, human-like motion)
+        # See: http://www.shadmehrlab.org/book/minimum_jerk/minimumjerk.htm
+        if alpha < 0:
+            return start_pos.copy()
+        elif alpha > 1:
+            return end_pos.copy()
+        else:
+            # Polynomial for minimum jerk trajectory
+            alpha3 = alpha * alpha * alpha
+            alpha4 = alpha3 * alpha
+            alpha5 = alpha4 * alpha
+            
+            smooth_alpha = 10 * alpha3 - 15 * alpha4 + 6 * alpha5
+            return start_pos + smooth_alpha * (end_pos - start_pos)
     
     def _send_to_robot(self, positions):
         """Send positions directly to the robot
@@ -859,5 +869,5 @@ class InterpolatedJointPublisher:
         # Convert to int32 as required by the robot
         positions = positions.astype(np.int32)
         
-        # Send directly to the robot
-        self.follower_arm.set_position(positions)
+        # Send directly to the robot using set_position_replay
+        self.follower_arm.set_position_replay(positions)

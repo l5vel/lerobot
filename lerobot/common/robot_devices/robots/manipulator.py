@@ -813,11 +813,11 @@ class InterpolatedJointPublisher:
                 # Calculate time within the current movement (0.0 to 1.0)
                 elapsed = time.time() - self.last_command_time
                 alpha = min(elapsed / self.move_duration, 1.0)
-                
+                print('lol')
                 if alpha < 1.0:
                     # Generate interpolated position
                     interp_position = self._interpolate_positions(
-                        self.current_position, self.target_position, alpha)
+                        np.array(self.follower_arm.get_position()), self.target_position, alpha)
                     
                     # Send to robot
                     self._send_to_robot(interp_position)
@@ -827,7 +827,7 @@ class InterpolatedJointPublisher:
                     
                     # Mark as complete and update current position
                     self.is_moving = False
-                    self.current_position = self.target_position.copy()
+                    self.current_position = np.array(self.follower_arm.get_position())
             
             # Maintain precise timing
             elapsed = time.time() - start_time

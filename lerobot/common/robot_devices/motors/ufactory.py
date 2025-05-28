@@ -176,7 +176,7 @@ class xArmWrapper:
 
         
         # joints
-        self.api.set_servo_angle(angle=angles, is_radian=False, wait=False, mvacc = 1145,speed=180) 
+        self.api.set_servo_angle(angle=angles, is_radian=False, wait=False, speed=self.MAX_SPEED_LIMIT, acceleration=self.MAX_ACC_LIMIT) 
         # gripper
         self.api.set_gripper_position(pos=gripper_pos, wait=False)
 

@@ -207,7 +207,7 @@ def record(
     num_episodes=50,
     video=True,
     run_compute_stats=True,
-    push_to_hub=True,
+    push_to_hub=False,
     tags=None,
     num_image_writer_processes=0,
     num_image_writer_threads_per_camera=4,

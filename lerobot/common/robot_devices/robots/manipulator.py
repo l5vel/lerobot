@@ -675,7 +675,7 @@ class ManipulatorRobot:
             # Send goal position to each follower
             goal_pos = goal_pos.numpy().astype(np.int32)
             if self.robot_type == "u850":
-                self.follower_arms[name].set_position(goal_pos)
+                self.follower_arms[name].set_position_replay(goal_pos)
             else:
                 self.follower_arms[name].write("Goal_Position", goal_pos)
 

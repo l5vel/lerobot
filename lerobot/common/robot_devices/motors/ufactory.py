@@ -39,6 +39,7 @@ class xArmWrapper:
 
         # Stop event
         self.stop_event = threading.Event()
+        self.replay_mode = False
 
         # Create and start the digital input monitoring thread
         print("Creating monitor thread")  # Debug print
@@ -99,6 +100,7 @@ class xArmWrapper:
         self.api.set_state(0)
         time.sleep(2)
         _, init_pos = tuple(self.api.get_initial_point())
+        print(init_pos)
         self.api.set_servo_angle(angle=init_pos,wait=True,is_radian=False)
         if follower:
             self.api.set_mode(1)
@@ -161,15 +163,33 @@ class xArmWrapper:
         pos = angles + [pos_gripper]
         return pos
 
-    def set_position(self, position: np.ndarray):
+    def set_position_replay(self, position: np.ndarray):
         angles = position[:-1].tolist()
         gripper_pos = int(position[-1])
 
+        if not self.replay_mode:
+            self.api.set_mode(0)  # Set to follower mode
+            self.api.set_state(0)  # Set to idle state
+            self.replay_mode = True
+        #angles = [round(angle,1) for angle in angles]  # Ensure angles are floats
+        #angles = angles[:6]  # Ensure only the first 6 angles are used, as U850 has 6 joints + gripp
+
+        
+        # joints
+        self.api.set_servo_angle(angle=angles, is_radian=False, wait=False, mvacc = 1145,speed=180) 
+        # gripper
+        self.api.set_gripper_position(pos=gripper_pos, wait=False)
+
+    def set_position(self,position: np.ndarray):
+        angles = position[:-1].tolist()
+        gripper_pos = int(position[-1])
+        
         # joints        
-        self.api.set_servo_angle_j(angles=angles, is_radian=False, wait=False)
+        self.api.set_servo_angle_j(angles=angles, is_radian=False,wait = False )
                 
         # gripper
         self.api.set_gripper_position(pos=gripper_pos, wait=False)
+
 
     def monitor_digital_input(self, stop_event):
         print("Starting monitor_digital_input")  # Debug print

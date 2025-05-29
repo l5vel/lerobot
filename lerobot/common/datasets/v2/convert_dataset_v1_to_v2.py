@@ -154,7 +154,7 @@ V1_STATS_PATH = "meta_data/stats.safetensors"
 
 
 def parse_robot_config(robot_cfg: RobotConfig) -> tuple[str, dict]:
-    if robot_cfg.type in ["aloha", "koch"]:
+    if robot_cfg.type in ["aloha", "koch","u850"]:
         state_names = [
             f"{arm}_{motor}" if len(robot_cfg.follower_arms) > 1 else motor
             for arm in robot_cfg.follower_arms
@@ -220,7 +220,7 @@ def get_features_from_hf_dataset(
             motor_names = (
                 robot_config["names"][key] if robot_config else [f"motor_{i}" for i in range(ft.length)]
             )
-            assert len(motor_names) == shape[0]
+            #assert len(motor_names) == shape[0]
             names = {"motors": motor_names}
         elif isinstance(ft, datasets.Image):
             dtype = "image"

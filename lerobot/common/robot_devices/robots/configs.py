@@ -556,6 +556,70 @@ class So100RobotConfig(ManipulatorRobotConfig):
 
     mock: bool = False
 
+@RobotConfig.register_subclass("u850")
+@dataclass
+class u850RobotConfig(ManipulatorRobotConfig):
+    calibration_dir: str = ".cache/calibration/u850"
+    # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
+    # Set this to a positive scalar to have the same value for all motors, or a list that is the same length as
+    # the number of motors in your follower arms.
+    max_relative_target: int | None = None
+
+    leader_arms: dict[str, MotorsBusConfig] = field(
+        default_factory=lambda: {
+            "main": FeetechMotorsBusConfig(
+                port="172.16.0.13",
+                motors={
+                    # name: (index, model)
+                    "joint1": [1, "ufactory-850"],  # +/- 360 degrees
+                    "joint2": [2, "ufactory-850"],  # +/- 132 degrees
+                    "joint3": [3, "ufactory-850"],  # -242 to 3.5 degrees
+                    "joint4": [4, "ufactory-850"],  # +/- 360 degrees
+                    "joint5": [5, "ufactory-850"],  # +/- 124 degrees
+                    "joint6": [6, "ufactory-850"],  # +/- 360 degrees
+                    "gripper": [7, "ufactory-850"],
+                },
+            ),
+        }
+    )
+
+    follower_arms: dict[str, MotorsBusConfig] = field(
+        default_factory=lambda: {
+            "main": FeetechMotorsBusConfig(
+                port="172.16.0.11",
+                motors={
+                    "joint1": [1, "ufactory-850"],  # +/- 360 degrees
+                    "joint2": [2, "ufactory-850"],  # +/- 132 degrees
+                    "joint3": [3, "ufactory-850"],  # -242 to 3.5 degrees
+                    "joint4": [4, "ufactory-850"],  # +/- 360 degrees
+                    "joint5": [5, "ufactory-850"],  # +/- 124 degrees
+                    "joint6": [6, "ufactory-850"],  # +/- 360 degrees
+                    "gripper": [7, "ufactory-850"],
+                
+                },
+            ),
+        }
+    )
+
+    cameras: dict[str, CameraConfig] = field(
+        default_factory=lambda: {
+            "top": OpenCVCameraConfig(
+                camera_index=8,
+                fps=30,
+                width=640,
+                height=480,
+            ),
+            "wrist": OpenCVCameraConfig(
+                camera_index=6,
+                fps=30,
+                width=640,
+                height=480,
+            ),
+        }
+    )
+
+    mock: bool = False
+
 
 @RobotConfig.register_subclass("stretch")
 @dataclass
@@ -591,6 +655,7 @@ class StretchRobotConfig(RobotConfig):
     )
 
     mock: bool = False
+
 
 
 @RobotConfig.register_subclass("lekiwi")

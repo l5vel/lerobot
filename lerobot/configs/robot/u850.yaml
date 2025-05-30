@@ -16,13 +16,13 @@ leader_arms:  # L
     port: 172.16.0.13
     motors:
       # name: (index, model)
-      joint1: [1, "ufactory-850"]  # +/- 360 degrees
-      joint2: [2, "ufactory-850"]  # +/- 132 degrees
-      joint3: [3, "ufactory-850"]  # -242 to 3.5 degrees
-      joint4: [4, "ufactory-850"]  # +/- 360 degrees
-      joint5: [5, "ufactory-850"]  # +/- 124 degrees
-      joint6: [6, "ufactory-850"]  # +/- 360 degrees
-      gripper: [7, "ufactory-850"]  
+      l_joint1: [1, "ufactory-850"]  # +/- 360 degrees
+      l_joint2: [2, "ufactory-850"]  # +/- 132 degrees
+      l_joint3: [3, "ufactory-850"]  # -242 to 3.5 degrees
+      l_joint4: [4, "ufactory-850"]  # +/- 360 degrees
+      l_joint5: [5, "ufactory-850"]  # +/- 124 degrees
+      l_joint6: [6, "ufactory-850"]  # +/- 360 degrees
+      l_gripper: [7, "ufactory-850"]  
 
 follower_arms:
   main:
@@ -30,13 +30,13 @@ follower_arms:
     port: 172.16.0.11
     motors:
       # name: (index, model)
-      joint1: [1, "ufactory-850"]  # +/- 360 degrees
-      joint2: [2, "ufactory-850"]  # +/- 132 degrees
-      joint3: [3, "ufactory-850"]  # -242 to 3.5 degrees
-      joint4: [4, "ufactory-850"]  # +/- 360 degrees
-      joint5: [5, "ufactory-850"]  # +/- 124 degrees
-      joint6: [6, "ufactory-850"]  # +/- 360 degrees
-      gripper: [7, "ufactory-850"]  # gripper
+      f_joint1: [1, "ufactory-850"]  # +/- 360 degrees
+      f_joint2: [2, "ufactory-850"]  # +/- 132 degrees
+      f_joint3: [3, "ufactory-850"]  # -242 to 3.5 degrees
+      f_joint4: [4, "ufactory-850"]  # +/- 360 degrees
+      f_joint5: [5, "ufactory-850"]  # +/- 124 degrees
+      f_joint6: [6, "ufactory-850"]  # +/- 360 degrees
+      f_gripper: [7, "ufactory-850"]  # gripper
 
 cameras:
   top:

@@ -521,6 +521,7 @@ class ManipulatorRobot:
         # Send goal position to the follower
         follower_goal_pos = {}
         for name in self.follower_arms:
+            print(name)
             before_fwrite_t = time.perf_counter()
             goal_pos = leader_pos[name]
             # Cap goal position when too far away from present position.

@@ -264,6 +264,7 @@ def control_loop(
 
         if teleoperate:
             observation, action = robot.teleop_step(record_data=True)
+            print("observation", observation['observation.state'],'action', action)
         else:
             observation = robot.capture_observation()
 
@@ -282,8 +283,9 @@ def control_loop(
             
             for key in image_keys:
                 print("trying to cv show")
-                #plt.imshow(observation[key].numpy())
-                #plt.pause(0.001)
+                if key == "wrist":
+                    plt.imshow(observation[key].numpy())
+                    plt.pause(0.001)
                 #cv2.imshow(key, cv2.cvtColor(observation[key].numpy(), cv2.COLOR_RGB2BGR))
                 #cv2.waitKey(0)
                 print("Key showed")

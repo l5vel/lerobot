@@ -46,6 +46,32 @@ def init_xarm(ip,init_pos=None):
     arm.set_servo_angle(angle=init_pos,wait=True,is_radian=False)
     return arm, init_pos
 
+def init_xarm_gripper(ip,init_pos=None):
+    arm = XArmAPI(ip)
+    #arm.reset()
+    arm.clean_error()
+    arm.clean_warn()
+    # arm.clean_gripper_error()
+    
+    # xarm gripper
+    arm.set_collision_tool_model(1) # xarm gripper
+    arm.set_gripper_enable(enable=True)
+    arm.set_gripper_mode(0)
+
+    #2f140
+    # arm.set_collision_tool_model(5)
+    # arm.robotiq_reset()
+    # arm.robotiq_set_activate()
+
+    arm.motion_enable(enable=True)
+    arm.set_mode(0)
+    arm.set_state(0)
+    time.sleep(2)
+    if init_pos == None:
+        _, init_pos = tuple(arm.get_initial_point())
+    arm.set_servo_angle(angle=init_pos,wait=True,is_radian=False)
+    return arm, init_pos
+
 def initialize_limits(arm):
     global MAX_SPEED_LIMIT, MAX_ACC_LIMIT
     MAX_SPEED_LIMIT = max(arm.joint_speed_limit)/5
@@ -64,6 +90,8 @@ def mimic_arm(arm_source, arm_target, stop_event):
         # code_gripper, pos_gripper = arm_source.get_gripper_position() #xarm gripper
         pos_gripper = arm_source.robotiq_status['gPO'] #2f140
         code_gripper = arm_source.robotiq_status['gFLT']
+
+        print(pos_gripper, code_gripper)
         
         if code == 0:
             # Command the target arm to move to the source arm's joint angles
@@ -73,8 +101,8 @@ def mimic_arm(arm_source, arm_target, stop_event):
 
         if code_gripper == 0:
             # command the gripper to follow
-        #     arm_target.set_gripper_position(pos=pos_gripper, wait=False)
-            arm_target.robotiq_set_position(pos_gripper)
+             arm_target.set_gripper_position(pos=pos_gripper, wait=False)
+            #arm_target.robotiq_set_position(pos_gripper)
 
         # Small sleep to prevent CPU overuse
         time.sleep(0.004)  # 250 Hz -> very smooth
@@ -141,18 +169,19 @@ def monitor_digital_input(arm, stop_event):
                             elif click_count == 2:
                                 if current_time - last_click_time < DOUBLE_CLICK_TIME:
                                     print("Double click detected -> Open gripper")
-                                    # arm.set_gripper_position(pos=GRIP_OPEN_WIDTH, wait=False)  # Open gripper xarm
+                                    #arm.set_gripper_position(pos=GRIP_OPEN_WIDTH, wait=False)  # Open gripper xarm
                                     arm.robotiq_open()
                                     click_count = 0
                                 else:
                                     print("Single click detected -> Close gripper")
-                                    # arm.set_gripper_position(pos=-GRIP_CLOSE_WIDTH, wait=False)  # Close gripper
+                                    #arm.set_gripper_position(pos=-GRIP_CLOSE_WIDTH, wait=False)  # Close gripper
                                     arm.robotiq_close()
                                     click_count = 1
                                     last_click_time = current_time
                         else:
                             print("Single click detected -> Close gripper")
-                            arm.set_gripper_position(pos=GRIP_CLOSE_WIDTH, wait=False)  # Close gripper
+                            arm.rototiq_close()
+                            #arm.set_gripper_position(pos=GRIP_CLOSE_WIDTH, wait=False)  # Close gripper
                             click_count = 0
 
                     last_release_time = current_time
@@ -175,7 +204,7 @@ ipR = "172.16.0.11"
 
 # Initialize both arms
 armL, init_pos = init_xarm(ipL)
-armR, init_pos = init_xarm(ipR,init_pos)
+armR, init_pos = init_xarm_gripper(ipR,init_pos)
 
 # Enable both arms, and grippers
 ## L

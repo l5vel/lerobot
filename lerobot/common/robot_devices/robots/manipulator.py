@@ -492,12 +492,12 @@ class ManipulatorRobot:
             self.follower_arms[name].write("Acceleration", 254)
 
     def set_u850_robot_preset(self):
-        for name in self.follower_arms:
-            print(f"Preset and enable {name} follower arm.")
-            self.follower_arms[name].enable(follower=True)
         for name in self.leader_arms:
             print(f"Preset and enable {name} leader arm.")
-            self.leader_arms[name].enable()
+            init_pos = self.leader_arms[name].enable(return_init_pos=True)
+        for name in self.follower_arms:
+            print(f"Preset and enable {name} follower arm.")
+            self.follower_arms[name].enable(follower=True,init_pos=init_pos)
 
     def teleop_step(
         self, record_data=False
@@ -520,15 +520,16 @@ class ManipulatorRobot:
 
         # Send goal position to the follower
         follower_goal_pos = {}
+        present_pos = {}
         for name in self.follower_arms:
-            print(name)
             before_fwrite_t = time.perf_counter()
             goal_pos = leader_pos[name]
             # Cap goal position when too far away from present position.
             # Slower fps expected due to reading from the follower.
             # print("Pose read from leader:", [f"{x:.2}" for x in goal_pos.tolist()])
             if self.robot_type == "u850":
-                leader_pos[name] = np.array(self.leader_arms[name].get_position())
+                #leader_pos[name] = np.array(self.leader_arms[name].get_position())
+                present_pos[name] = np.array(self.follower_arms[name].get_position()) 
                 self.follower_arms[name].set_position(goal_pos)
             else:
                 if self.config.max_relative_target is not None:
@@ -548,12 +549,13 @@ class ManipulatorRobot:
             follower_goal_pos[name] = goal_pos
 
             goal_pos = goal_pos.numpy().astype(np.int32)
-            # if self.robot_type == "u850":
-            #     self.follower_arms[name].set_position(goal_pos)
-            # else:
-            #     self.follower_arms[name].write("Goal_Position", goal_pos)
-            if not(self.robot_type == "u850"):
+            if self.robot_type == "u850":
+                #self.follower_arms[name].set_position(goal_pos)
+                continue
+            else:
                 self.follower_arms[name].write("Goal_Position", goal_pos)
+            # if not(self.robot_type == "u850"):
+            #     self.follower_arms[name].write("Goal_Position", goal_pos)
             self.logs[f"write_follower_{name}_goal_pos_dt_s"] = time.perf_counter() - before_fwrite_t
 
         # Early exit when recording data is not requested
@@ -565,12 +567,12 @@ class ManipulatorRobot:
         follower_pos = {}
         for name in self.follower_arms:
             before_fread_t = time.perf_counter()
-            if self.robot_type == "u850":
-                #print(self.follower_arms[name].get_position())
-                follower_pos[name] = np.array(self.follower_arms[name].get_position())
-            else:
-                follower_pos[name] = self.follower_arms[name].read("Present_Position")
-            follower_pos[name] = torch.from_numpy(follower_pos[name])
+            # if self.robot_type == "u850":
+            #     #print(self.follower_arms[name].get_position())
+            #     follower_pos[name] = np.array(self.follower_arms[name].get_position())
+            # else:
+            #     follower_pos[name] = self.follower_arms[name].read("Present_Position")
+            follower_pos[name] = torch.from_numpy(present_pos[name])
             self.logs[f"read_follower_{name}_pos_dt_s"] = time.perf_counter() - before_fread_t
 
         # Create state by concatenating follower current position
@@ -814,7 +816,6 @@ class InterpolatedJointPublisher:
                 # Calculate time within the current movement (0.0 to 1.0)
                 elapsed = time.time() - self.last_command_time
                 alpha = min(elapsed / self.move_duration, 1.0)
-                print('lol')
                 if alpha < 1.0:
                     # Generate interpolated position
                     interp_position = self._interpolate_positions(

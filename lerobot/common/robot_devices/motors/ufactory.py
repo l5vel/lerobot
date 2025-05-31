@@ -93,14 +93,14 @@ class xArmWrapper:
     def read(self, data_name, motor_names: str | list[str] | None = None):
         pass  # TODO (@vmayoral): implement if of interest
 
-    def enable(self, follower: bool = False):
+    def enable(self, follower: bool = False,return_init_pos: bool = False,init_pos: np.ndarray = None):
         self.api.motion_enable(enable=True)
         self.api.clean_error()
         self.api.set_mode(0)
         self.api.set_state(0)
         time.sleep(2)
-        _, init_pos = tuple(self.api.get_initial_point())
-        print(init_pos)
+        if init_pos is None:
+            _, init_pos = tuple(self.api.get_initial_point())
         self.api.set_servo_angle(angle=init_pos,wait=True,is_radian=False)
         if follower:
             self.api.set_mode(1)
@@ -121,6 +121,11 @@ class xArmWrapper:
             self.api.set_state(0)
             # Light up the digital output 2 (button), to signal manual mode
             self.api.set_tgpio_digital(ionum=2, value=1)
+        
+        if return_init_pos:
+            # Return the initial position of the robot
+            return np.array(init_pos)
+        
 
     def disconnect(self):
         print("Disconnecting from xArm")  # Debug print
@@ -159,8 +164,8 @@ class xArmWrapper:
     def get_position(self):
         code, angles = self.api.get_servo_angle()
         code_gripper, pos_gripper = self.api.get_gripper_position()
-        # pos = angles[:-1] + [pos_gripper]  # discard 7th dof, which is not present in U850
-        pos = angles + [pos_gripper]
+        pos = angles[:-1] + [pos_gripper]  # discard 7th dof, which is not present in U850
+        #pos = angles + [pos_gripper]
         return pos
 
     def set_position_replay(self, position: np.ndarray):

@@ -22,7 +22,7 @@ leader_arms:  # L
       joint4: [4, "ufactory-850"]  # +/- 360 degrees
       joint5: [5, "ufactory-850"]  # +/- 124 degrees
       joint6: [6, "ufactory-850"]  # +/- 360 degrees
-      gripper: [7, "ufactory-850"]  
+      gripper: [7, "robotiq"]  # gripper
 
 follower_arms:
   main:
@@ -36,7 +36,7 @@ follower_arms:
       joint4: [4, "ufactory-850"]  # +/- 360 degrees
       joint5: [5, "ufactory-850"]  # +/- 124 degrees
       joint6: [6, "ufactory-850"]  # +/- 360 degrees
-      gripper: [7, "ufactory-850"]  # gripper
+      gripper: [7, "robotiq"]  # gripper
 
 cameras:
   top:

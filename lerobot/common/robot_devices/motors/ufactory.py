@@ -107,10 +107,18 @@ class xArmWrapper:
         else:
             self.api.set_mode(0)
         self.api.set_state(state=0)
-        #
-        self.api.set_gripper_mode(0)
-        self.api.set_gripper_enable(True)
-        self.api.set_gripper_speed(5000)  # default speed, as there's no way to fetch gripper speed from API
+        #get the indixof the gripper
+        if self.motor_models[-1] == "gipper":
+            self.api.set_gripper_mode(0)
+            self.api.set_gripper_enable(True)
+            self.api.set_gripper_speed(5000)  # default speed, as there's no way to fetch gripper speed from API
+        elif self.motor_models[-1] == "robotiq":
+            #self.api.set_collision_tool_model(5)
+            self.api.robotiq_reset()
+            self.api.robotiq_set_activate()
+            self.api.set_gripper_speed(5000)
+        else:
+            raise ValueError(f"Unsupported gripper model: {self.motor_models[-1]}")
 
         # # Initialize the global speed and acceleration limits
         # self.initialize_limits()  # not acting as expected
@@ -162,11 +170,17 @@ class xArmWrapper:
         self.MAX_ACC_LIMIT = max(self.api.joint_acc_limit)/3
 
     def get_position(self):
-        code, angles = self.api.get_servo_angle()
-        code_gripper, pos_gripper = self.api.get_gripper_position()
-        pos = angles[:-1] + [pos_gripper]  # discard 7th dof, which is not present in U850
-        #pos = angles + [pos_gripper]
-        return pos
+        if self.motor_models[-1] == "gipper":
+            code, angles = self.api.get_servo_angle()
+            code_gripper, pos_gripper = self.api.get_gripper_position()
+            pos = angles[:-1] + [pos_gripper]  # discard 7th dof, which is not present in U850
+            #pos = angles + [pos_gripper]
+            return pos
+        elif self.motor_models[-1] == "robotiq":
+            code, angles = self.api.get_servo_angle()
+            code_gripper, pos_gripper = self.api.robotq_status['gFLT'], self.api.robotiq_status['gPO']
+            pos = angles[:-1] + [pos_gripper]
+            return pos
 
     def set_position_replay(self, position: np.ndarray):
         angles = position[:-1].tolist()
@@ -247,27 +261,46 @@ class xArmWrapper:
                                             last_click_time = current_time
                                         elif click_count == 2:
                                             if current_time - last_click_time < DOUBLE_CLICK_TIME:
-                                                print("Double click detected -> Open gripper")
-                                                self.api.set_gripper_position(pos=600, wait=False)  # Open gripper
-                                                click_count = 0
+                                                if self.motor_models[-1] == "gipper":
+                                                    print("Double click detected -> Open gripper")
+                                                    self.api.set_gripper_position(pos=600, wait=False)  # Open gripper
+                                                    click_count = 0
+                                                elif self.motor_models[-1] == "robotiq":
+                                                    print("Double click detected -> Open gripper")
+                                                    self.api.robotiq_open()
+                                                    click_count = 0
                                             else:
-                                                print("Single click detected -> Close gripper")
-                                                self.api.set_gripper_position(pos=50, wait=False)  # Close gripper
-                                                click_count = 1
+                                                if self.motor_models[-1] == "gipper":
+                                                    print("Single click detected -> Close gripper")
+                                                    self.api.set_gripper_position(pos=50, wait=False)  # Close gripper
+                                                    click_count = 1
+                                                elif self.motor_models[-1] == "robotiq":
+                                                    print("Single click detected -> Close gripper")
+                                                    self.api.robotiq_close()
+                                                    click_count = 1
                                                 last_click_time = current_time
                                     else:
-                                        print("Single click detected -> Close gripper")
-                                        self.api.set_gripper_position(pos=50, wait=False)  # Close gripper
-                                        click_count = 0
+                                        if click_count == 1 and self.motor_models[-1] == "gipper":
+                                            print("Single click detected -> Close gripper")
+                                            self.api.set_gripper_position(pos=50, wait=False)  # Close gripper
+                                            click_count = 0
+                                        elif click_count == 1 and self.motor_models[-1] == "robotiq":
+                                            print("Single click detected -> Close gripper")
+                                            self.api.robotiq_close()
+                                            click_count = 0
 
                                 last_release_time = current_time
                                 last_press_time = 0
                                 long_click_detected = False
 
                         # Reset click count if too much time has passed since last click
-                        if click_count == 1 and current_time - last_click_time >= DOUBLE_CLICK_TIME:
+                        if click_count == 1 and current_time - last_click_time >= DOUBLE_CLICK_TIME and self.motor_models[-1] == "gipper":
                             print("Single click detected -> Close gripper")
                             self.api.set_gripper_position(pos=50, wait=False)  # Close gripper
+                            click_count = 0
+                        elif click_count == 1 and current_time - last_click_time >= DOUBLE_CLICK_TIME and self.motor_models[-1] == "robotiq":
+                            print("Single click detected -> Close gripper")
+                            self.api.robotiq_close()
                             click_count = 0
 
                 else:
@@ -280,5 +313,8 @@ class xArmWrapper:
 
 
     def robot_reset(self):
-        """Reset the robot to a safe state"""
-        self.api.set_gripper_position(pos=600, wait=True)  # Open gripper
+        if self.motor_models[-1] == "robotiq":
+            self.api.robotiq_reset()
+            raise ValueError(f"Unsupported gripper model: {self.motor_models[-1]}")
+        elif self.motor_models[-1] == "gipper":
+            self.api.set_gripper_position(pos=600, wait=True)
